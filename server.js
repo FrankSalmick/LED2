@@ -1,16 +1,17 @@
 const WebSocket = require('ws');
 const fs = require('fs');
-var writeStream = fs.createWriteStream('./log.txt', {'flags': 'a'});
-writeStream.write('abc');
-writeStream.write('def');
+var logStream = fs.createWriteStream('./log.txt', {'flags': 'a'});
+logStream.write('abc');
+logStream.write('def');
 var connections = {};
+const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const wss = new WebSocket.Server({port: 8081});
 
 const debugActions = {
 	printSocketIDs: (socket, data) => {
 		for (const key in connections) {
-			console.log(key + " : " + connections[key].actionsObject);
+			logLine(key + " : " + connections[key].actionsObject);
 		}
 	},
 	echo: (socket, data) => {
@@ -21,9 +22,15 @@ const debugActions = {
 const globalActions = {
 	...debugActions,
 	setActionSet: (socket, data) => {
-		if (data.password == "chipperyMan753") {
-			socket.actionsObject = data.newActionSet;
-		}
+        var password = data[1];
+		if (password == "chipperyMan753") {
+            socket.actionsObject = data.newActionSet;
+            return 1;
+        }
+        else {
+            logLine("Socket " + socket.name + " provided invalid password " + password);
+            return 0;
+        }
 	}
 } 
 
@@ -34,30 +41,45 @@ const ledActions = {
 const unassignedActions = {
 	...globalActions,
 	register: (socket, data) => {
-		console.log("Registering " + data.name);
-		connections[data.name] = socket;
-		socket.actionsObject = ledActions;
+        var name = data[1];
+        logLine(socket.name + "->" + name);
+        connections[data.name] = socket;
+        socket.name = name;
+        socket.actionsObject = ledActions;
+        return 1;
 	}
 }
 
 const log = (data) => {
-	console.log(data);
+    var d = new Date(Date.now());
+    var message = months[d.getMonth()] + " " + d.getDate() + " " + d.getHours() + ":" + d.getMinutes() + ":" + d.getSeconds() + " " + data;
+    process.stdout.write(message);
+    logStream.write(message);
+};
+
+const logLine = (data) => {
+    return log(data + "\n");
 };
 
 wss.on('connection', (ws) => {
-	console.log("Got connection.");
+	logLine("Got new connection.");
 	ws.on('message', (message) => {
-		var data = JSON.parse(message);
-		console.log(data)
+        // Data will be formatted: command,arg1,...,argn
+        // Reason it's not json or something easier is because the board I'm using only has 10KB ram and I'd rather use it for something else
+        logLine(ws.name + " sent " + message);
+        var data = message.split(",");
+        var command = data[0];
+
 		if (ws.actionsObject == undefined) {
 			ws.actionsObject = unassignedActions;
 		}
-		var funToCall = ws.actionsObject[data.action];
+		var funToCall = ws.actionsObject[command];
 		if (funToCall == undefined) {
-			// Handle unavailable thing
+            logLine(ws.name + " called " + command + ", but that doesn't exist for its group.");
+            ws.send("0");
 		}
 		else {
-			funToCall(ws, data);
+			ws.send(funToCall(ws, data));
 		}
 	});
 });
