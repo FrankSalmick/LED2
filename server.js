@@ -54,6 +54,7 @@ const actionGroups = {
             return 1;
         },
         deregister: (socket) => {
+            logLine("Deregistering an unregistered client.");
             return 1;
         }
     }},
@@ -63,6 +64,7 @@ const actionGroups = {
         name: 'Registered',
         // This command will usually be called if the socket is closed for some reason, so there is no data passed to it
         deregister: (socket) => {
+            logLine("Deregistering " + socket.name);
             delete connections[socket.name];
             return 1;
         },
@@ -100,7 +102,7 @@ const actionGroups = {
 
 const log = (data) => {
     var d = new Date(Date.now());
-    var message = months[d.getMonth()] + " " + d.getDate().padStart(2, '0') + " " + d.getHours().padStart(2, '0') + ":" + d.getMinutes().padStart(2, '0') + ":" + d.getSeconds().padStart(2, '0') + " " + data;
+    var message = months[d.getMonth()] + " " + d.getDate() + " " + d.getHours() + ":" + d.getMinutes() + ":" + d.getSeconds() + " " + data;
     process.stdout.write(message);
     logStream.write(message);
 };
@@ -119,7 +121,6 @@ wss.on('connection', (ws) => {
         var data = message.split(",");
         var command = data[0];
         var funToCall = ws.actions[command];
-
 		if (funToCall == undefined) {
             logLine(ws.name + " called " + command + ", but that doesn't exist for its group.");
             ws.send("0");
@@ -128,6 +129,9 @@ wss.on('connection', (ws) => {
 			ws.send(funToCall(ws, data));
 		}
     });
+    // todo: for some reason this doesn't always work.
     ws.on('close', ws.actions.deregister);
     ws.on('error', ws.actions.deregister);
 });
+
+logLine("Ready.");
