@@ -9,14 +9,21 @@ var connections = {};
 const actionGroups = {
     get debugActions() { return {
         name: 'Debug',
-        printSocketIDs: (socket, data) => {
+        print: (socket, data) => {
             for (const key in connections) {
                 logLine(key + " : " + connections[key].actions.name);
             }
         },
         echo: (socket, data) => {
             var message = data[1];
+            logLine("Echoing " + message);
             socket.send(message);
+        },
+        changeName: (socket, data) => {
+            var newName = data[1];
+            connections[newName] = socket;
+            delete connections[socket.name];
+            socket.name = newName;
         }
     }},
 
@@ -24,9 +31,14 @@ const actionGroups = {
         ...actionGroups.debugActions,
         name: 'Global',
         setActionSet: (socket, newActionSet) => {
-            logLine("Moving " + socket.name + " to action set " + newActionSet.name + " (was " + socket.actions.name + ")");
-            socket.actions = newActionSet;
-            return 1;
+            if (newActionSet == undefined) {
+                logLine("Unable to move " + socket.name + " to new action set because it is undefined.");
+                return 0;
+            } else {
+                logLine("Moving " + socket.name + " to action set " + newActionSet.name + " (was " + socket.actions.name + ")");
+                socket.actions = newActionSet;
+                return 1;
+            }
         }
     }},
 
@@ -37,11 +49,12 @@ const actionGroups = {
             var name = data[1];
             connections[name] = socket;
             socket.name = name;
+            logLine("Assigned name to " + name);
             socket.actions.setActionSet(socket, actionGroups.ledActions);
             return 1;
         },
         deregister: (socket) => {
-            socket.close();
+            return 1;
         }
     }},
 
@@ -51,14 +64,13 @@ const actionGroups = {
         // This command will usually be called if the socket is closed for some reason, so there is no data passed to it
         deregister: (socket) => {
             delete connections[socket.name];
-            socket.close();
             return 1;
         },
         overrideActionSet: (socket, data) => {
             var password = data[1];
             var newActionSet = data[2];
             if (password == "chipperyMan753") {
-                socket.actions.setActionSet(actionGroups[newActionSet]);
+                socket.actions.setActionSet(socket, actionGroups[newActionSet]);
                 return 1;
             }
             else {
@@ -88,7 +100,7 @@ const actionGroups = {
 
 const log = (data) => {
     var d = new Date(Date.now());
-    var message = months[d.getMonth()] + " " + d.getDate() + " " + d.getHours() + ":" + d.getMinutes() + ":" + d.getSeconds() + " " + data;
+    var message = months[d.getMonth()] + " " + d.getDate().padStart(2, '0') + " " + d.getHours().padStart(2, '0') + ":" + d.getMinutes().padStart(2, '0') + ":" + d.getSeconds().padStart(2, '0') + " " + data;
     process.stdout.write(message);
     logStream.write(message);
 };
